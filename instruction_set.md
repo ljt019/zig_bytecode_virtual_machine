@@ -1,0 +1,11 @@
+# Instruction Set
+
+PUSH 1
+POP 2
+ADD 3
+SUB 4
+MUL 5
+DIV 6
+PRINT 7
+PRINT_CHAR 8
+HALT 9
