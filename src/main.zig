@@ -28,18 +28,51 @@ const VM = struct {
     pub fn load_program(self: *VM, program: []u8) void {
         self.instructions = program;
     }
+
+    /// Push a value onto the stack.
+    pub fn push(self: *VM, value: i32) void {
+        // Optionally add bounds checking here
+        self.stack[self.stack_top] = value;
+        self.stack_top += 1;
+    }
+
+    /// Pop a value from the stack.
+    /// Returns an error if the stack is empty.
+    pub fn pop(self: *VM) !i32 {
+        if (self.stack_top == 0) {
+            return error.StackUnderflow;
+        }
+        self.stack_top -= 1;
+        return self.stack[self.stack_top];
+    }
 };
 
-const Opcode = enum {
-    PUSH,
-    POP,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    PRINT,
-    PRINT_CHAR,
-    HALT,
+const Opcode = enum(u8) {
+    // Stack Manipulation:
+    PUSH = 1, // Push a value onto the stack
+    POP = 2, // Pop a value off the stack
+    DUP = 3, // Duplicate the top value
+    SWAP = 4, // Swap the two top values
+
+    // Arithmetic Operations:
+    ADD = 5, // Add two top values
+    SUB = 6, // Subtract two top values
+    MUL = 7, // Multiply two top values
+    DIV = 8, // Divide two top values
+    MOD = 9, // Modulo of two top values
+
+    // Flow Control:
+    JMP = 10, // Unconditional jump
+    JZ = 11, // Jump if zero
+    JNZ = 12, // Jump if not zero
+    NOP = 13, // No operation
+
+    // I/O:
+    PRINT = 14, // Print a number
+    PRINT_CHAR = 15, // Print an ASCII character
+
+    // Stop execution
+    HALT = 16,
 };
 
 pub fn main() !void {
@@ -74,52 +107,30 @@ pub fn main() !void {
                 const next_byte = vm.instructions[vm.ip + 1];
 
                 // Push the next_byte onto the stack
-                vm.stack[vm.stack_top] = next_byte;
-                vm.stack_top += 1;
+                vm.push(next_byte);
 
                 // Move the ip forward an extra position to account for the pushed byte
                 vm.ip += 1;
             },
             // decrement stack_top
             Opcode.POP => {
-                if (vm.stack_top == 0) {
-                    std.debug.print("Stack underflow error\n", .{});
-                    return;
-                }
-
-                vm.stack_top -= 1;
+                _ = try vm.pop();
             },
+            Opcode.DUP => {},
+            Opcode.SWAP => {},
             // pop two values, add, push result
             Opcode.ADD => {
-                if (vm.stack_top < 2) {
-                    std.debug.print("Stack underflow error (ADD needs 2 operands)\n", .{});
-                    return;
-                }
-
-                vm.stack_top -= 1;
-                const first_byte = vm.stack[vm.stack_top];
-
-                vm.stack_top -= 1;
-                const second_byte = vm.stack[vm.stack_top];
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
 
                 const sum = first_byte + second_byte;
 
-                vm.stack[vm.stack_top] = sum;
-
-                vm.stack_top += 1;
+                vm.push(sum);
             },
             // pop two values, subtract, push result
             Opcode.SUB => {
-                if (vm.stack_top < 2) {
-                    std.debug.print("Stack underflow error (SUB needs 2 operands)\n", .{});
-                    return;
-                }
-
-                vm.stack_top -= 1;
-                const first_byte = vm.stack[vm.stack_top];
-
-                vm.stack_top -= 1;
-                const second_byte = vm.stack[vm.stack_top];
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
 
                 const difference = first_byte - second_byte;
 
@@ -128,59 +139,44 @@ pub fn main() !void {
                 vm.stack_top += 1;
             },
             Opcode.MUL => {
-                if (vm.stack_top < 2) {
-                    std.debug.print("Stack underflow error (MUL needs 2 operands)\n", .{});
-                    return;
-                }
-
-                vm.stack_top -= 1;
-                const first_byte = vm.stack[vm.stack_top];
-
-                vm.stack_top -= 1;
-                const second_byte = vm.stack[vm.stack_top];
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
 
                 const product = first_byte * second_byte;
 
-                vm.stack[vm.stack_top] = product;
-
-                vm.stack_top += 1;
+                vm.push(product);
             },
             // pop two values, divide, push result
             Opcode.DIV => {
-                if (vm.stack_top < 2) {
-                    std.debug.print("Stack underflow error (DIV needs 2 operands)\n", .{});
-                    return;
-                }
-
-                vm.stack_top -= 1;
-                const first_byte = vm.stack[vm.stack_top];
-
-                vm.stack_top -= 1;
-                const second_byte = vm.stack[vm.stack_top];
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
 
                 const quotient = @divTrunc(second_byte, first_byte);
 
-                vm.stack[vm.stack_top] = quotient;
-
-                vm.stack_top += 1;
+                vm.push(quotient);
             },
+            Opcode.MOD => {
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
+
+                const mod = second_byte % first_byte;
+
+                vm.push(mod);
+            },
+            Opcode.JMP => {},
+            Opcode.JZ => {},
+            Opcode.JNZ => {},
+            Opcode.NOP => {},
             // pop value, print to stdout,
             Opcode.PRINT => {
-                vm.stack_top -= 1;
-
-                const last_byte = vm.stack[vm.stack_top];
+                const last_byte = try vm.pop();
 
                 std.debug.print("{}\n", .{last_byte});
             },
             // Pops a number from stack; interprets it as ASCII char, prints it
             Opcode.PRINT_CHAR => {
-                if (vm.stack_top == 0) {
-                    std.debug.print("Stack underflow error (PRINT_CHAR needs 1 operand)\n", .{});
-                    return;
-                }
+                const char_code = try vm.pop();
 
-                vm.stack_top -= 1;
-                const char_code = vm.stack[vm.stack_top];
                 std.debug.print("{c}", .{@as(u8, @intCast(char_code))});
             },
             // break loop (VM execution ends),
