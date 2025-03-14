@@ -44,8 +44,8 @@ const Opcode = enum {
 
 pub fn main() !void {
     var program = [_]u8{
-        0, 72, 7, // PUSH 'H' (ASCII 72), PRINT_CHAR
-        0, 101, 7, // PUSH 'e' (ASCII 101), PRINT_CHAR
+        0, 72, 7, // PUSH 'H', PRINT_CHAR
+        0, 101, 7, // PUSH 'e', PRINT_CHAR
         0, 108, 7, // PUSH 'l', PRINT_CHAR
         0, 108, 7, // PUSH 'l', PRINT_CHAR
         0, 111, 7, // PUSH 'o', PRINT_CHAR
@@ -55,7 +55,8 @@ pub fn main() !void {
         0, 114, 7, // PUSH 'r', PRINT_CHAR
         0, 108, 7, // PUSH 'l', PRINT_CHAR
         0, 100, 7, // PUSH 'd', PRINT_CHAR
-        0, 10, 7, // PUSH newline (ASCII 10), PRINT_CHAR
+        0, 33, 7, // PUSH '!', PRINT_CHAR
+        0, 10, 7, // PUSH newline, PRINT_CHAR
         8, // HALT
     };
 
