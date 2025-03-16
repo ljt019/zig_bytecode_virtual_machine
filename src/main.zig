@@ -77,20 +77,64 @@ const Opcode = enum(u8) {
 
 pub fn main() !void {
     var program = [_]u8{
-        0, 72, 7, // PUSH 'H', PRINT_CHAR
-        0, 101, 7, // PUSH 'e', PRINT_CHAR
-        0, 108, 7, // PUSH 'l', PRINT_CHAR
-        0, 108, 7, // PUSH 'l', PRINT_CHAR
-        0, 111, 7, // PUSH 'o', PRINT_CHAR
-        0, 32, 7, // PUSH ' ', PRINT_CHAR
-        0, 87, 7, // PUSH 'W', PRINT_CHAR
-        0, 111, 7, // PUSH 'o', PRINT_CHAR
-        0, 114, 7, // PUSH 'r', PRINT_CHAR
-        0, 108, 7, // PUSH 'l', PRINT_CHAR
-        0, 100, 7, // PUSH 'd', PRINT_CHAR
-        0, 33, 7, // PUSH '!', PRINT_CHAR
-        0, 10, 7, // PUSH newline, PRINT_CHAR
-        8, // HALT
+        // Arithmetic test:
+        1, 10, // 0-1: PUSH 10
+        1, 20, // 2-3: PUSH 20
+        5, // 4:   ADD (10+20=30)
+        14, // 5:   PRINT (prints 30)
+        1, 42, // 6-7: PUSH 42
+        3, // 8:   DUP (stack becomes [42,42])
+        14, // 9:   PRINT (prints 42, stack now [42])
+        1, 5, // 10-11: PUSH 5 (stack becomes [42,5])
+        7, // 12:  MUL (42*5=210, stack becomes [210])
+        14, // 13:  PRINT (prints 210)
+
+        // SWAP test:
+        1, 3, // 15-16: PUSH 3
+        1, 4, // 17-18: PUSH 4
+        4, // 19: SWAP (swap top two values)
+        14, // 20: PRINT (prints 3)
+        14, // 21: PRINT (prints 4)
+
+        // Loop test (countdown from 3 to 1):
+        1, 3, // 22-23: PUSH 3 (counter)
+        3, // 24: DUP (duplicate counter)
+        14, // 25: PRINT (prints counter)
+        1, 1, // 26-27: PUSH 1
+        6, // 28: SUB (counter - 1)
+        3, // 29: DUP (duplicate new counter)
+        1, 22, // 30-31: PUSH 22 (jump target: instruction index 22)
+        12, // 32: JNZ (if counter != 0, jump to index 22)
+        2, // 33: POP (cleanup leftover 0)
+
+        // PRINT_CHAR test ("Hello World!\n"):
+        1, 72, // 34-35: PUSH 72 ('H')
+        15, // 36: PRINT_CHAR
+        1, 101, // 37-38: PUSH 101 ('e')
+        15, // 39: PRINT_CHAR
+        1, 108, // 40-41: PUSH 108 ('l')
+        15, // 42: PRINT_CHAR
+        1, 108, // 43-44: PUSH 108 ('l')
+        15, // 45: PRINT_CHAR
+        1, 111, // 46-47: PUSH 111 ('o')
+        15, // 48: PRINT_CHAR
+        1, 32, // 49-50: PUSH 32 (' ')
+        15, // 51: PRINT_CHAR
+        1, 87, // 52-53: PUSH 87 ('W')
+        15, // 54: PRINT_CHAR
+        1, 111, // 55-56: PUSH 111 ('o')
+        15, // 57: PRINT_CHAR
+        1, 114, // 58-59: PUSH 114 ('r')
+        15, // 60: PRINT_CHAR
+        1, 108, // 61-62: PUSH 108 ('l')
+        15, // 63: PRINT_CHAR
+        1, 100, // 64-65: PUSH 100 ('d')
+        15, // 66: PRINT_CHAR
+        1, 33, // 67-68: PUSH 33 ('!')
+        15, // 69: PRINT_CHAR
+        1, 10, // 70-71: PUSH 10 (newline)
+        15, // 72: PRINT_CHAR
+        16, // 73: HALT
     };
 
     var vm = try VM.init(&program);
@@ -116,8 +160,19 @@ pub fn main() !void {
             Opcode.POP => {
                 _ = try vm.pop();
             },
-            Opcode.DUP => {},
-            Opcode.SWAP => {},
+            Opcode.DUP => {
+                const byte = try vm.pop();
+
+                vm.push(byte);
+                vm.push(byte);
+            },
+            Opcode.SWAP => {
+                const first_byte = try vm.pop();
+                const second_byte = try vm.pop();
+
+                vm.push(first_byte);
+                vm.push(second_byte);
+            },
             // pop two values, add, push result
             Opcode.ADD => {
                 const first_byte = try vm.pop();
@@ -132,11 +187,9 @@ pub fn main() !void {
                 const first_byte = try vm.pop();
                 const second_byte = try vm.pop();
 
-                const difference = first_byte - second_byte;
+                const difference = second_byte - first_byte;
 
-                vm.stack[vm.stack_top] = difference;
-
-                vm.stack_top += 1;
+                vm.push(difference);
             },
             Opcode.MUL => {
                 const first_byte = try vm.pop();
@@ -159,14 +212,35 @@ pub fn main() !void {
                 const first_byte = try vm.pop();
                 const second_byte = try vm.pop();
 
-                const mod = second_byte % first_byte;
+                const remainder = @rem(second_byte, first_byte);
 
-                vm.push(mod);
+                vm.push(remainder);
             },
-            Opcode.JMP => {},
-            Opcode.JZ => {},
-            Opcode.JNZ => {},
-            Opcode.NOP => {},
+            Opcode.JMP => {
+                const jmp_target = try vm.pop();
+
+                // Subtract one to account for the ip++ at the end of the loop
+                vm.ip = @as(usize, @intCast(jmp_target)) - 1;
+            },
+            Opcode.JZ => {
+                const jmp_target = try vm.pop();
+                const byte = try vm.pop();
+
+                if (byte == 0) {
+                    vm.ip = @as(usize, @intCast(jmp_target)) - 1;
+                }
+            },
+            Opcode.JNZ => {
+                const jmp_target = try vm.pop();
+                const byte = try vm.pop();
+
+                if (byte != 0) {
+                    vm.ip = @as(usize, @intCast(jmp_target)) - 1;
+                }
+            },
+            Opcode.NOP => {
+                // Intentionally empty - do nothing!
+            },
             // pop value, print to stdout,
             Opcode.PRINT => {
                 const last_byte = try vm.pop();
